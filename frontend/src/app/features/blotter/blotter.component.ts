@@ -249,7 +249,7 @@ export class BlotterComponent implements OnInit {
       suppressMovable: true,
       cellStyle: { cursor: 'pointer', color: '#8a93a6', textAlign: 'center', fontSize: '16px' },
       valueGetter: () => '✕',
-      tooltipValueGetter: () => 'Remove from watchlist',
+      tooltip: () => 'Remove from watchlist',
     },
   ];
 

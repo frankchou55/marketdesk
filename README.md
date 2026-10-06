@@ -6,7 +6,7 @@ A live market blotter built with **Angular, NgRx and AG Grid**. It streams real-
 
 **Live demo: https://marketdesk.frankchou.dev**
 
-<!-- TODO: add a screenshot or short GIF of the live blotter here, e.g. docs/images/blotter.png -->
+![Market Desk live blotter](docs/images/blotter.png)
 
 ## Features
 

@@ -1,9 +1,9 @@
 import 'zone.js';
-import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { AppComponent } from './app/app';
 import { appConfig } from './app/app.config';
+import { registerGridModules } from './app/grid-modules';
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+registerGridModules();
 
 bootstrapApplication(AppComponent, appConfig).catch((err) => console.error(err));
