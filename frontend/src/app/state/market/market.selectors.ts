@@ -17,3 +17,8 @@ export const selectMarketError = createSelector(
   selectMarketState,
   (state: MarketState) => state.error
 );
+
+export const selectConnection = createSelector(
+  selectMarketState,
+  (state: MarketState) => ({ state: state.connection, message: state.connectionMessage })
+);

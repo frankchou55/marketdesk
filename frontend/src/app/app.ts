@@ -1,19 +1,29 @@
-import { Component } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject } from '@angular/core';
+import { AsyncPipe } from '@angular/common';
+import { Store } from '@ngrx/store';
+import { selectConnection } from './state/market/market.selectors';
 import { BlotterComponent } from './features/blotter/blotter.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, BlotterComponent],
+  imports: [AsyncPipe, BlotterComponent],
   template: `
     <div class="app">
       <header class="header">
-        <h1>Market Desk</h1>
-        <div class="connection-status">
-          <span class="status-indicator live"></span>
-          <span>Live</span>
+        <div class="brand">
+          <span class="logo">MD</span>
+          <div>
+            <h1>Market Desk</h1>
+            <p>Live crypto market blotter</p>
+          </div>
         </div>
+        @if (connection$ | async; as conn) {
+          <div class="status" [attr.data-state]="conn.state">
+            <span class="dot"></span>
+            <span>{{ conn.state === 'live' ? 'Live' : conn.message }}</span>
+          </div>
+        }
       </header>
       <main>
         <app-blotter />
@@ -21,67 +31,79 @@ import { BlotterComponent } from './features/blotter/blotter.component';
     </div>
   `,
   styles: [`
+    :host { display: block; height: 100vh; }
+
     .app {
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      background-color: #fafbfc;
+      height: 100%;
     }
 
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 24px;
-      background-color: #ffffff;
-      border-bottom: 1px solid #e1e4e8;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      padding: 12px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
     }
 
-    h1 {
-      margin: 0;
-      font-size: 24px;
-      font-weight: 600;
-      color: #24292e;
+    .brand { display: flex; align-items: center; gap: 12px; }
+
+    .logo {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #7a5cff);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #fff;
     }
 
-    .connection-status {
+    h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.2px; }
+    p { margin: 2px 0 0; font-size: 12px; color: var(--text-dim); }
+
+    .status {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 6px 12px;
-      background-color: #f6f8fa;
-      border-radius: 6px;
-      font-size: 14px;
-      color: #586069;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-2);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-dim);
     }
 
-    .status-indicator {
-      display: inline-block;
+    .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background-color: #ccc;
-
-      &.live {
-        background-color: #22863a;
-        animation: pulse 2s infinite;
-      }
+      background: var(--text-dim);
     }
 
+    .status[data-state='live'] { color: var(--up); }
+    .status[data-state='live'] .dot { background: var(--up); animation: pulse 2s infinite; }
+    .status[data-state='connecting'] .dot,
+    .status[data-state='reconnecting'] .dot { background: #f5a524; }
+    .status[data-state='offline'] .dot { background: var(--down); }
+
     @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
+      0%, 100% { box-shadow: 0 0 0 0 rgba(38, 194, 129, 0.5); }
+      50% { box-shadow: 0 0 0 5px rgba(38, 194, 129, 0); }
     }
 
     main {
       flex: 1;
-      overflow: hidden;
+      min-height: 0;
+      padding: 16px 20px 20px;
     }
   `],
 })
-export class AppComponent {}
+export class AppComponent {
+  connection$ = inject(Store).select(selectConnection);
+}

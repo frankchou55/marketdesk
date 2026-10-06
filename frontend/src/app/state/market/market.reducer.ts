@@ -2,10 +2,13 @@ import { createEntityAdapter, EntityAdapter, EntityState } from '@ngrx/entity';
 import { createReducer, on } from '@ngrx/store';
 import { Ticker } from '../../shared/models/ticker.model';
 import * as MarketActions from './market.actions';
+import type { ConnectionState } from './market.actions';
 
 export interface MarketState extends EntityState<Ticker> {
   loading: boolean;
   error: string | null;
+  connection: ConnectionState;
+  connectionMessage: string;
 }
 
 export const adapter: EntityAdapter<Ticker> = createEntityAdapter<Ticker>({
@@ -15,6 +18,8 @@ export const adapter: EntityAdapter<Ticker> = createEntityAdapter<Ticker>({
 const initialState: MarketState = adapter.getInitialState({
   loading: false,
   error: null,
+  connection: 'offline',
+  connectionMessage: 'Disconnected',
 });
 
 export const marketReducer = createReducer(
@@ -28,7 +33,12 @@ export const marketReducer = createReducer(
   ),
   on(MarketActions.ticksReceived, (state, { batch }) =>
     adapter.upsertMany(batch, state)
-  )
+  ),
+  on(MarketActions.connectionStatusChanged, (state, { state: connection, message }) => ({
+    ...state,
+    connection,
+    connectionMessage: message,
+  }))
 );
 
 export const {

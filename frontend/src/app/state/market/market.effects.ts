@@ -1,9 +1,26 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { of } from 'rxjs';
-import { map, switchMap } from 'rxjs/operators';
+import { merge, of } from 'rxjs';
+import { map, switchMap, tap } from 'rxjs/operators';
+import { MarketSocketService, BinanceTick } from '../../core/market-socket.service';
 import { Ticker } from '../../shared/models/ticker.model';
 import * as MarketActions from './market.actions';
+
+function toTicker(t: BinanceTick): Ticker {
+  const price = parseFloat(t.c);
+  const open = parseFloat(t.o);
+  const change = price - open;
+  return {
+    symbol: t.s,
+    price,
+    change,
+    changePercent: open ? (change / open) * 100 : 0,
+    volume: parseFloat(t.v),
+    bid: t.b,
+    ask: t.a,
+    timestamp: t.E,
+  };
+}
 
 const MOCK_TICKERS: Ticker[] = [
   { symbol: 'AAPL', price: 150.25, change: 2.5, changePercent: 1.69, volume: 45000000, bid: 150.24, ask: 150.26, timestamp: Date.now() },
@@ -30,16 +47,49 @@ const MOCK_TICKERS: Ticker[] = [
 
 @Injectable()
 export class MarketEffects {
-  loadMockTickers$ = createEffect(() =>
+  private readonly actions$ = inject(Actions);
+  private readonly socket = inject(MarketSocketService);
+
+  readonly loadMockTickers$ = createEffect(() =>
     this.actions$.pipe(
       ofType(MarketActions.loadMockTickers),
+      switchMap(() => of(MarketActions.tickersLoaded({ tickers: MOCK_TICKERS })))
+    )
+  );
+
+  /** Opens the Binance stream and feeds status + batched ticks into the store. */
+  readonly connectSocket$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(MarketActions.connectSocket),
+      tap(() => this.socket.connect()),
       switchMap(() =>
-        of({ tickers: MOCK_TICKERS }).pipe(
-          map((data) => MarketActions.tickersLoaded(data))
+        merge(
+          this.socket.connection$.pipe(
+            map(({ state, message }) => MarketActions.connectionStatusChanged({ state, message }))
+          ),
+          this.socket.ticks$.pipe(
+            map((ticks) => MarketActions.ticksReceived({ batch: ticks.map(toTicker) }))
+          )
         )
       )
     )
   );
 
-  constructor(private actions$: Actions) {}
+  readonly symbolAdded$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(MarketActions.symbolAdded),
+        tap(({ symbol }) => this.socket.subscribeToSymbol(symbol))
+      ),
+    { dispatch: false }
+  );
+
+  readonly symbolRemoved$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(MarketActions.symbolRemoved),
+        tap(({ symbol }) => this.socket.unsubscribeFromSymbol(symbol))
+      ),
+    { dispatch: false }
+  );
 }
