@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker/project name in the Cloudflare dashboard.
+  "name": "marketdesk",
+  "compatibility_date": "2026-10-06",
+  "assets": {
+    "directory": "./dist/frontend/browser",
+    "not_found_handling": "single-page-application"
+  }
+}
