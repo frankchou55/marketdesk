@@ -1,6 +1,10 @@
 import { TestBed } from '@angular/core/testing';
+import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 import { AppComponent } from './app';
 import { provideMockStore } from '@ngrx/store/testing';
+
+// main.ts registers these at runtime; tests bootstrap components directly, so register here too.
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 describe('AppComponent', () => {
   beforeEach(async () => {
@@ -14,6 +18,10 @@ describe('AppComponent', () => {
               entities: {},
               loading: false,
               error: null,
+              connection: 'live',
+              connectionMessage: 'Connected',
+              pending: [],
+              watchError: null,
             },
           },
         }),

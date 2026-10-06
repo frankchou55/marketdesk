@@ -8,7 +8,7 @@ import { Ticker } from '../../shared/models/ticker.model';
 import * as MarketActions from './market.actions';
 import { selectPending } from './market.selectors';
 
-function toTicker(t: BinanceTick): Ticker {
+export function toTicker(t: BinanceTick): Ticker {
   const price = parseFloat(t.c);
   const open = parseFloat(t.o);
   const change = price - open;
