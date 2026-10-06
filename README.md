@@ -4,6 +4,8 @@
 
 A live market blotter built with **Angular, NgRx and AG Grid**. It streams real-time crypto prices from Binance.US over a WebSocket and shows them in a sortable, filterable, paged grid with a watchlist you can edit on the fly.
 
+**Live demo: https://marketdesk.frankchou.dev**
+
 <!-- TODO: add a screenshot or short GIF of the live blotter here, e.g. docs/images/blotter.png -->
 
 ## Features
@@ -73,4 +75,4 @@ Unit tests (Vitest via the Angular test builder) cover the reducer and watchlist
 
 ## Status
 
-Front end only, running locally. Not deployed yet. Planned next: deployment to Cloudflare, and a Spring Boot and Kafka backend (see `docs/`).
+Front end only, deployed to Cloudflare (Workers static assets) at https://marketdesk.frankchou.dev. Every push to `main` is built and deployed by Cloudflare's Git integration (GitHub Actions CI runs separately). Planned next: a Spring Boot and Kafka backend (see `docs/`).
