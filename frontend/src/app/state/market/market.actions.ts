@@ -33,3 +33,10 @@ export const connectionStatusChanged = createAction(
   '[Market] Connection Status Changed',
   props<{ state: ConnectionState; message: string }>()
 );
+
+export const symbolFailed = createAction(
+  '[Market] Symbol Failed',
+  props<{ symbol: string; reason: string }>()
+);
+
+export const retryConnection = createAction('[Market] Retry Connection');

@@ -22,3 +22,13 @@ export const selectConnection = createSelector(
   selectMarketState,
   (state: MarketState) => ({ state: state.connection, message: state.connectionMessage })
 );
+
+export const selectPending = createSelector(
+  selectMarketState,
+  (state: MarketState) => state.pending
+);
+
+export const selectWatchError = createSelector(
+  selectMarketState,
+  (state: MarketState) => state.watchError
+);

@@ -1,10 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
 import { merge, of } from 'rxjs';
-import { map, switchMap, tap } from 'rxjs/operators';
+import { Store } from '@ngrx/store';
+import { delay, filter, map, mergeMap, switchMap, tap, withLatestFrom } from 'rxjs/operators';
 import { MarketSocketService, BinanceTick } from '../../core/market-socket.service';
 import { Ticker } from '../../shared/models/ticker.model';
 import * as MarketActions from './market.actions';
+import { selectPending } from './market.selectors';
 
 function toTicker(t: BinanceTick): Ticker {
   const price = parseFloat(t.c);
@@ -49,6 +51,7 @@ const MOCK_TICKERS: Ticker[] = [
 export class MarketEffects {
   private readonly actions$ = inject(Actions);
   private readonly socket = inject(MarketSocketService);
+  private readonly store = inject(Store);
 
   readonly loadMockTickers$ = createEffect(() =>
     this.actions$.pipe(
@@ -80,6 +83,39 @@ export class MarketEffects {
       this.actions$.pipe(
         ofType(MarketActions.symbolAdded),
         tap(({ symbol }) => this.socket.subscribeToSymbol(symbol))
+      ),
+    { dispatch: false }
+  );
+
+  /** A subscribed symbol that never produces a tick (e.g. not listed on Binance.US) is dropped after 8s. */
+  readonly symbolTimeout$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(MarketActions.symbolAdded),
+      mergeMap(({ symbol }) =>
+        of(symbol).pipe(
+          delay(8000),
+          withLatestFrom(this.store.select(selectPending)),
+          filter(([s, pending]) => pending.includes(s)),
+          map(([s]) => MarketActions.symbolFailed({ symbol: s, reason: `No market data for ${s} — is it listed on Binance.US?` }))
+        )
+      )
+    )
+  );
+
+  readonly symbolFailed$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(MarketActions.symbolFailed),
+        tap(({ symbol }) => this.socket.unsubscribeFromSymbol(symbol))
+      ),
+    { dispatch: false }
+  );
+
+  readonly retryConnection$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(MarketActions.retryConnection),
+        tap(() => this.socket.retry())
       ),
     { dispatch: false }
   );

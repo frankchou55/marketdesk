@@ -9,6 +9,8 @@ export interface MarketState extends EntityState<Ticker> {
   error: string | null;
   connection: ConnectionState;
   connectionMessage: string;
+  pending: string[];
+  watchError: string | null;
 }
 
 export const adapter: EntityAdapter<Ticker> = createEntityAdapter<Ticker>({
@@ -20,6 +22,8 @@ const initialState: MarketState = adapter.getInitialState({
   error: null,
   connection: 'offline',
   connectionMessage: 'Disconnected',
+  pending: [],
+  watchError: null,
 });
 
 export const marketReducer = createReducer(
@@ -31,9 +35,31 @@ export const marketReducer = createReducer(
   on(MarketActions.tickersLoaded, (state, { tickers }) =>
     adapter.setAll(tickers, { ...state, loading: false })
   ),
-  on(MarketActions.ticksReceived, (state, { batch }) =>
-    adapter.upsertMany(batch, state)
+  on(MarketActions.ticksReceived, (state, { batch }) => {
+    const arrived = new Set(batch.map((t) => t.symbol));
+    return adapter.upsertMany(batch, {
+      ...state,
+      pending: state.pending.filter((s) => !arrived.has(s)),
+    });
+  }),
+  on(MarketActions.symbolAdded, (state, { symbol }) => {
+    if (state.entities[symbol]) {
+      return { ...state, watchError: `${symbol} is already on the watchlist` };
+    }
+    return {
+      ...state,
+      watchError: null,
+      pending: state.pending.includes(symbol) ? state.pending : [...state.pending, symbol],
+    };
+  }),
+  on(MarketActions.symbolRemoved, (state, { symbol }) =>
+    adapter.removeOne(symbol, { ...state, pending: state.pending.filter((s) => s !== symbol) })
   ),
+  on(MarketActions.symbolFailed, (state, { symbol, reason }) => ({
+    ...state,
+    pending: state.pending.filter((s) => s !== symbol),
+    watchError: reason,
+  })),
   on(MarketActions.connectionStatusChanged, (state, { state: connection, message }) => ({
     ...state,
     connection,

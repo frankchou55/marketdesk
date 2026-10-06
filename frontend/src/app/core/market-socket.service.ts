@@ -6,6 +6,15 @@ import { filter, tap } from 'rxjs/operators';
 // Binance.US is the US-compliant endpoint (binance.com blocks US IPs). Same message format.
 const STREAM_BASE_URL = 'wss://stream.binance.us:9443/stream';
 
+const DEFAULT_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'DOGEUSDT',
+  'SOLUSDT', 'XRPUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT',
+  'LTCUSDT', 'MATICUSDT', 'ATOMUSDT', 'UNIUSDT', 'SHIBUSDT',
+];
+
+export const EMPTY_WATCHLIST_MESSAGE = 'Watchlist is empty';
+const STORAGE_KEY = 'marketdesk.watchlist.v1';
+
 export interface ConnectionStatus {
   state: 'connecting' | 'live' | 'reconnecting' | 'offline';
   message: string;
@@ -26,15 +35,14 @@ export interface BinanceTick {
 @Injectable({ providedIn: 'root' })
 export class MarketSocketService {
   private ws$: WebSocketSubject<any> | null = null;
+  private controlId = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private reconnectDelay = 1000;
-  private activeSymbols = new Set<string>([
-    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'DOGEUSDT',
-    'SOLUSDT', 'XRPUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT',
-    'LTCUSDT', 'MATICUSDT', 'ATOMUSDT', 'UNIUSDT', 'SHIBUSDT',
-  ]);
+  private activeSymbols = new Set<string>(this.loadWatchlist());
+  /** Symbols baked into the current socket's URL, to reconcile with changes made while it was connecting. */
+  private urlSymbols = new Set<string>();
 
   private connectionSubject = new BehaviorSubject<ConnectionStatus>({
     state: 'offline',
@@ -53,6 +61,47 @@ export class MarketSocketService {
 
   constructor() {
     this.initWorker();
+    this.watchBrowserState();
+  }
+
+  private loadWatchlist(): string[] {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+      if (Array.isArray(saved) && saved.every((x) => typeof x === 'string' && /^[A-Z0-9]{2,15}$/.test(x))) {
+        return saved;
+      }
+    } catch {
+      /* storage unavailable or corrupt: fall back to defaults */
+    }
+    return [...DEFAULT_SYMBOLS];
+  }
+
+  private saveWatchlist(): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...this.activeSymbols]));
+    } catch {
+      /* ignore quota / private-mode errors */
+    }
+  }
+
+  /** Recover quickly when the network returns or the tab is revisited, instead of waiting out the backoff. */
+  private watchBrowserState(): void {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('online', () => {
+      if (this.connectionSubject.value.state !== 'live') this.retry();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.connectionSubject.value.state === 'offline') {
+        this.retry();
+      }
+    });
+  }
+
+  /** Manual / automatic recovery: forget the backoff and try again now. */
+  retry(): void {
+    this.disconnect();
+    this.reconnectAttempts = 0;
+    this.connect();
   }
 
   private initWorker(): void {
@@ -72,8 +121,14 @@ export class MarketSocketService {
     if (this.ws$) return;
     this.clearReconnectTimer();
 
+    if (this.activeSymbols.size === 0) {
+      this.connectionSubject.next({ state: 'offline', message: EMPTY_WATCHLIST_MESSAGE });
+      return;
+    }
+
     this.connectionSubject.next({ state: 'connecting', message: 'Connecting to Binance...' });
 
+    this.urlSymbols = new Set(this.activeSymbols);
     const streamNames = Array.from(this.activeSymbols)
       .map((s) => `${s.toLowerCase()}@ticker`)
       .join('/');
@@ -87,6 +142,10 @@ export class MarketSocketService {
           if (this.ws$ !== socket) return;
           this.reconnectAttempts = 0;
           this.connectionSubject.next({ state: 'live', message: 'Connected' });
+          // Reconcile symbols added/removed while the socket was still connecting.
+          for (const sym of this.activeSymbols) if (!this.urlSymbols.has(sym)) this.sendControl('SUBSCRIBE', sym);
+          for (const sym of this.urlSymbols) if (!this.activeSymbols.has(sym)) this.sendControl('UNSUBSCRIBE', sym);
+          this.urlSymbols = new Set(this.activeSymbols);
         },
       },
       closeObserver: {
@@ -185,19 +244,33 @@ export class MarketSocketService {
     socket?.complete();
   }
 
+  /** Adds a symbol to the live stream without reconnecting (Binance SUBSCRIBE control message). */
   subscribeToSymbol(symbol: string): void {
+    if (this.activeSymbols.has(symbol)) return;
     this.activeSymbols.add(symbol);
-    if (this.ws$) {
-      this.disconnect();
+    this.saveWatchlist();
+    // First symbol after an empty watchlist: there is no socket yet, so open one.
+    if (!this.ws$ && !this.reconnectTimer && this.activeSymbols.size === 1) {
       this.connect();
+      return;
     }
+    this.sendControl('SUBSCRIBE', symbol);
   }
 
   unsubscribeFromSymbol(symbol: string): void {
-    this.activeSymbols.delete(symbol);
-    if (this.ws$) {
+    if (!this.activeSymbols.delete(symbol)) return;
+    this.saveWatchlist();
+    this.sendControl('UNSUBSCRIBE', symbol);
+    if (this.activeSymbols.size === 0) {
       this.disconnect();
-      this.connect();
+      this.connectionSubject.next({ state: 'offline', message: EMPTY_WATCHLIST_MESSAGE });
+    }
+  }
+
+  private sendControl(method: 'SUBSCRIBE' | 'UNSUBSCRIBE', symbol: string): void {
+    // While not live, connect()'s open handler reconciles against activeSymbols.
+    if (this.ws$ && this.connectionSubject.value.state === 'live') {
+      this.ws$.next({ method, params: [`${symbol.toLowerCase()}@ticker`], id: ++this.controlId });
     }
   }
 }
